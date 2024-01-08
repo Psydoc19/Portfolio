@@ -2,7 +2,7 @@
 <img src="https://github.com/Psydoc19/portfolio/assets/142113921/8ce2cdb3-a4e7-4c09-8f39-77bbc8adaba3" width="250" height="250">
 
 ## Introduction
-Greetings! I am Vitalii Diakonov, a passionate data scientist based in the lively city of Miami. My academic foundation is rooted in Medicine, followed by specialized studies in Economics, and further augmented with a Master's degree in Data Science. This diverse educational trajectory provides me with a multifaceted perspective, enabling me to deliver insights that harmoniously integrate across various disciplines.
+Greetings! I am Vitalii Diakonov, a passionate Data Scientist based in the vibrant city of Miami, USA. My academic foundation is rooted in Medicine, followed by specialized studies in Economics, and further augmented with a Master's degree in Data Science. This diverse educational trajectory provides me with a multifaceted perspective, enabling me to deliver insights that harmoniously integrate across various disciplines.
 
 ## About This Repository
 This GitHub repository serves as a window into my professional journey and showcases a curated collection of my public projects. Each project encapsulates my dedication to leveraging data-driven methodologies to derive actionable insights, solve intricate problems, and drive meaningful change across diverse domains.
