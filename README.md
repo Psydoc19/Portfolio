@@ -11,7 +11,7 @@ This GitHub repository serves as a window into my professional journey and showc
 As you navigate through this repository, you'll encounter a variety of projects that reflect my versatility as a data scientist. Whether it's analyzing intricate datasets, developing predictive models, or uncovering patterns to inform strategic decisions, each project encapsulates a facet of my expertise.
 
 ## Projects Highlights
-- **[Salifort Motors]**: This data analysis embarked on a comprehensive exploration of employee workload, satisfaction, and potential enhancement areas within Salifort Motors. 
+- **[Salifort Motors](https://github.com/Psydoc19/portfolio/tree/main/Salifort-Motors)**: This data analysis embarked on a comprehensive exploration of employee workload, satisfaction, and potential enhancement areas within Salifort Motors. 
 
 
 ## Get in Touch
