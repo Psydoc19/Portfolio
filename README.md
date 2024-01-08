@@ -15,7 +15,7 @@ As you navigate through this repository, you'll encounter a variety of projects 
 
 
 ## Get in Touch
-I am always eager to collaborate, share insights, and explore opportunities that align with my passion for data science. Feel free to reach out via [LinkedIn](https://www.linkedin.com/in/vitalii-diakonov) or [Email](doctor.diakonov@gmail.com) to initiate a conversation or discuss potential collaborations.
+I am always eager to collaborate, share insights, and explore opportunities that align with my passion for data science. Feel free to reach out via [LinkedIn](https://www.linkedin.com/in/vitalii-diakonov) or [Email](mailto:doctor.diakonov@gmail.com) to initiate a conversation or discuss potential collaborations.
 
 ## Acknowledgments
 I extend my gratitude to the data science community, mentors, and peers who have enriched my journey with invaluable insights, feedback, and collaborative opportunities.
