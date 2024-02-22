@@ -10,7 +10,7 @@ All necessary files for the project to run smoothly are located in its directory
 
 Simply launch the R Quattro Markdown file named `BRFSS.qmd` and enjoy!
 
-Alternatively, for non-technical users, you can use the '`Asthma insights/ Unveiling patterns and predictors in R.html`'  or even '`pdf`' file.
+Alternatively, for non-technical users, you can use the '`Asthma insights/ Unveiling patterns and predictors in R.html`'  or '`pdf`' file with the same name.
 
 ## Data Preparation
 
