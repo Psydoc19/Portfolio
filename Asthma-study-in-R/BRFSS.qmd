@@ -1077,7 +1077,7 @@ brf_data_prepared <- brf_data |>
 str(brf_data_prepared)
 ```
 
-My **`brf_data_prepared`** dataset now consists of 369,162 observations and 5 variables, each correctly formatted as factors with the desired reference levels.
+My **`brf_data_prepared`** dataset now consists of 372,066 observations and 5 variables, each correctly formatted as factors with the desired reference levels.
 
 ### Сhecking assumptions
 
