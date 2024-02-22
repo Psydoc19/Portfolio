@@ -1,4 +1,4 @@
-# Salifort Motors Project: Analyzing Employee Workload and Retention Strategies
+# Salifort Motors Project: Analyzing Employee Workload and Retention Strategies using Python
 
 ## Project Overview
 The Salifort Motors Project delves deep into understanding the intricacies of employee workload, satisfaction levels, and the consequent impact on retention rates within the automotive organization. Utilizing advanced data modeling techniques and analytics, this project aims to pinpoint critical factors that influence employee satisfaction and, subsequently, provide actionable strategies to enhance organizational well-being.
