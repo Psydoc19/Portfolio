@@ -1244,7 +1244,7 @@ Evaluating my logistic regression model, I looked at the Akaike Information Crit
 
 Throughout my comprehensive analysis of the "**2022 BRFSS Survey Data**," I embarked on an in-depth exploration into asthma's prevalence and the myriad factors influencing it, spanning individual behaviors to broader socio-demographic dimensions. Here's a synthesis of my key findings, extending from exploratory data analysis to intricate logistic regression insights:
 
--   **Health Days and Asthma's Impact:** My investigation highlighted a skewed distribution of reported poor health days, emphasizing the significant burden asthma places on both physical and mental well-being. Notably, individuals with current asthma experienced a greater number of poor health days, underlining the chronic nature of asthma.
+-   **Health Days and Asthma's Impact:** My investigation highlighted significant burden asthma places on both physical and mental well-being. Notably, individuals with current asthma experienced a greater number of poor health days, underlining the chronic nature of asthma.
 
 -   **Prevalence Across Age and Smoking Habits:** Asthma prevalence proved stable across age groups, yet notably peaked among adults aged 55 to 64, suggesting the effects of long-term exposure to risk factors. The analysis also underscored a strong correlation between smoking habits and asthma prevalence, reinforcing the critical impact of smoking on respiratory health.
 
