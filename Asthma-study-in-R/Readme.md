@@ -6,7 +6,11 @@ In this comprehensive study, I employed EDA, statistical analysis and logistic r
 
 **Note:** Full dataset documentation and access instructions can be found on the [CDC's BRFSS page](https://www.cdc.gov/brfss/annual_data/annual_2022.html).
 
-All necessary files for the project to run smoothly are located in its directory. Simply launch the R Quattro Markdown file named **BRFSS.qmd** and enjoy!
+All necessary files for the project to run smoothly are located in its directory.
+
+Simply launch the R Quattro Markdown file named `BRFSS.qmd` and enjoy!
+
+Alternatively, for non-technical users, you can use the '`Asthma insights/ Unveiling patterns and predictors in R.html`' file.
 
 ## Data Preparation
 
@@ -18,35 +22,35 @@ This research underscores the intricate interplay between genetic, environmental
 
 ## Key Findings
 
--   **Asthma's Impact:**
+**Asthma's Impact:**
 
-    -   Asthma leads to more poor health days, especially for those currently suffering from it, highlighting its chronic nature.
+-   Asthma leads to more poor health days, especially for those currently suffering from it, highlighting its chronic nature.
 
-    **Prevalence Across Age and Smoking:**
+**Prevalence Across Age and Smoking:**
 
-    -   Asthma rates remain steady across age groups but peak in adults aged 55 to 64, possibly due to long-term risk exposure.
+-   Asthma rates remain steady across age groups but peak in adults aged 55 to 64, possibly due to long-term risk exposure.
 
-    -   Smoking habits strongly correlate with asthma prevalence, emphasizing smoking's respiratory health impact.
+-   Smoking habits strongly correlate with asthma prevalence, emphasizing smoking's respiratory health impact.
 
-    **Influence of Gender, Race/Ethnicity, and Weight:**
+**Influence of Gender, Race/Ethnicity, and Weight:**
 
-    -   Multiracial females, obese individuals, and past smokers face higher asthma risks, showcasing gender, race/ethnicity, and BMI's roles.
+-   Multiracial females, obese individuals, and past smokers face higher asthma risks, showcasing gender, race/ethnicity, and BMI's roles.
 
-    **Socio-Demographic Factors:**
+**Socio-Demographic Factors:**
 
-    -   Marital status affects asthma prevalence, with divorce potentially increasing risk and stable marriages offering protection.
+-   Marital status affects asthma prevalence, with divorce potentially increasing risk and stable marriages offering protection.
 
-    -   Both underweight and obesity contribute to asthma risk, challenging conventional beliefs.
+-   Both underweight and obesity contribute to asthma risk, challenging conventional beliefs.
 
-    **Lifestyle's Role:**
+**Lifestyle's Role:**
 
-    -   Regular physical activity benefits asthma sufferers' health perceptions.
+-   Regular physical activity benefits asthma sufferers' health perceptions.
 
-    -   Asthma negatively impacts employment status, with more current sufferers unable to work.
+-   Asthma negatively impacts employment status, with more current sufferers unable to work.
 
-    **Geographic Variations:**
+**Geographic Variations:**
 
-    -   Significant regional differences in asthma prevalence exist in the United States, influenced by environmental factors and healthcare access.
+-   Significant regional differences in asthma prevalence exist in the United States, influenced by environmental factors and healthcare access.
 
 ## Conclusion
 
