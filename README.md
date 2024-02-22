@@ -13,7 +13,7 @@ As you navigate through this repository, you'll encounter a variety of projects 
 ## Projects Highlights
 - **[Asthma Study Using the 2022 BRFSS Survey Data in R](Asthma-study-in-R)**: A deep dive into the Behavioral Risk Factor Surveillance System data to explore the multifaceted nature of asthma. This project showcases my ability to navigate through a vast dataset, apply logistic regression, and uncover insights that bridge the gap between data science and public health. The study revealed significant associations between asthma prevalence and factors such as race/ethnicity, sex, BMI category, and smoking status, contributing valuable insights to the field of medical data science.
 
-- **[Salifort Motors in Python](https://github.com/Psydoc19/portfolio/tree/ab95fc72ffd8623c342055ea403b25deb3311445/Salifort-Motors-analysis-Python)**: This data analysis embarked on a comprehensive exploration of employee workload, satisfaction, and potential enhancement areas within Salifort Motors. 
+- **[Salifort Motors in Python](Salifort-Motors-analysis-Python)**: This data analysis embarked on a comprehensive exploration of employee workload, satisfaction, and potential enhancement areas within Salifort Motors. 
 
 
 ## Get in Touch
