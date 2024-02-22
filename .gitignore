@@ -4,6 +4,22 @@ __pycache__/
 *$py.class
 .DS_Store
 .Rhistory
+
+# R specific files
+.Rproj.user/
+.Rproj.user/*
+.RData
+.RDataTmp
+.RDS
+
+# Python virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
 # C extensions
 *.so
 
