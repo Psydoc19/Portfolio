@@ -1,0 +1,1263 @@
+---
+title: 'Asthma insights: Unveiling patterns and predictors in R'
+subtitle: 'An analysis of the 2022 BRFSS survey data'
+output: html_notebook
+editor_options:
+  chunk_output_type: inline
+---
+
+------------------------------------------------------------------------
+
+## About Me
+
+------------------------------------------------------------------------
+
+I am **Vitalii Diakonov**, a passionate Data Scientist based in the vibrant city of Miami, USA.
+
+My academic foundation is rooted in Medicine, followed by specialized studies in Economics, and further augmented with a Master's degree in Data Science. This diverse educational trajectory provides me with a multifaceted perspective, enabling me to deliver insights that harmoniously integrate across various disciplines.
+
+------------------------------------------------------------------------
+
+## Data Source
+
+------------------------------------------------------------------------
+
+For my research, I will use the "2022 BRFSS Survey Data" from the CDC, found at [CDC's 2022 BRFSS Survey Data](https://www.cdc.gov/brfss/annual_data/annual_2022.html).
+
+This dataset provides extensive data on health behaviors and conditions in the U.S. adult population. I aim to apply this data for both analytical and educational purposes. The CDC and ATSDR's content is mostly public domain, allowing free use without copyright restrictions.
+
+**Citation:** Centers for Disease Control and Prevention (CDC). Behavioral Risk Factor Surveillance System Survey Data. Atlanta, Georgia: U.S. Department of Health and Human Services, Centers for Disease Control and Prevention, 2022.
+
+For maps visualizations I will use cartographic boundary files. The cartographic boundary files are simplified representations of selected geographic areas from the [Census Bureau's](https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.html "Cartographic Boundary Files - Shapefile") MAF/TIGER geographic database.
+
+------------------------------------------------------------------------
+
+## Preliminaries
+
+------------------------------------------------------------------------
+
+The original dataset was huge, over a gigabyte in size, which made it quite difficult to handle.
+
+After carefully going through the extensive documentation, which included a whopping 328 variables, I narrowed down my focus to only the ones most relevant to my research.
+
+I concentrated on variables that could give me valuable insights into asthma and its related factors. By trimming the dataset down to just 13 key variables and converting it to CSV format, I made it much easier to work with.
+
+You can find this survey documentation in the same directory as the project for further review. Feel free to check it out to understand why I chose these variables and how they support my research goals.
+
+```{r}
+# It's always a good idea when working in RStudio to start with a clean environment.
+rm(list = ls())
+
+# Load required libraries
+# Packages to check and install if necessary
+required_packages <- c("tidyverse", "caret", "scales", "sf", "stats")
+
+# Function to check package installation and load if necessary
+check_and_load_packages <- function(packages) {
+  for (pkg in packages) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      install.packages(pkg)
+    }
+    library(pkg, character.only = TRUE)
+  }
+}
+
+# Call the function to check package installation and load if necessary
+check_and_load_packages(required_packages)
+
+
+# Load states map for visualizations
+states_map <- st_read("cb_2018_us_state_500k/cb_2018_us_state_500k.shp")
+
+# Load the filtered data file
+brf_data <- read.csv("filtered_data.csv")
+```
+
+------------------------------------------------------------------------
+
+## Initial Overview
+
+------------------------------------------------------------------------
+
+```{r}
+# Taking a first look on the dataset
+head(brf_data)
+```
+
+Looks like we've hit a snag in understanding, so let's simplify things for anyone trying to make sense of it.
+
+Here's a rundown of the selected variables according to the documentation:
+
+-   **X_STATE**: State FIPS code, crucial for geographical analysis.
+
+-   **PHYSHLTH**: Reflects the number of days with poor physical health, essential for correlating physical health conditions with asthma.
+
+-   **MENTHLTH**: Indicates days affected by poor mental health, relevant for exploring the mental health aspects of asthma sufferers.
+
+-   **EXERANY2**: Provides insight into physical activity levels, which could influence asthma management.
+
+-   **MARITAL**: Marital status, to explore social determinants of health.
+
+-   **EMPLOY1**: Employment status, for assessing the impact of occupational environments on asthma or vice versa.
+
+-   **X_ASTHMS1**: Computed asthma status, the primary variable for identifying the target population.
+
+-   **X_RACEGR4**: Race/ethnicity data, important for studying asthma prevalence across different demographic groups.
+
+-   **X_SEX**: Sex of the respondent, as asthma incidence and severity can vary by gender.
+
+-   **X_AGE_G**: Age groups, to understand age-related patterns in asthma prevalence.
+
+-   **X_BMI5CAT**: BMI categories, linking obesity and asthma.
+
+-   **X_SMOKER3**: Smoking status, due to its significant impact on respiratory health.
+
+-   **X_RFHLTH**: General health status, offering a broader view of respondents' health beyond asthma.
+
+These variables in my opinion are important for a nuanced analysis of asthma within the broader context of physical and mental health, lifestyle factors, and demographic characteristics.
+
+------------------------------------------------------------------------
+
+## Data Preparation
+
+------------------------------------------------------------------------
+
+### Renaming columns for clarity
+
+First, I will rename variables to more descriptive and meaningful names:
+
+```{r}
+# Rename columns
+brf_data <- brf_data |>
+  rename(State = X_STATE,
+         Days_PhysHealth_Bad = PHYSHLTH,
+         Days_MentHealth_Bad = MENTHLTH,
+         Exercise = EXERANY2,
+         Marital_Status = MARITAL,
+         Employment_Status = EMPLOY1,
+         Asthma_Status = X_ASTHMS1,
+         Race_Ethnicity = X_RACEGR4,
+         Sex = X_SEX,
+         Age_Group = X_AGE_G,
+         BMI_Category = X_BMI5CAT,
+         Smoking_Status = X_SMOKER3,
+         General_Health = X_RFHLTH)
+
+# Check the result
+colnames(brf_data)
+```
+
+### Variables recoding
+
+My next step is to tackle the recoding of specific codes that represent special values, such as 77, 88, and 99, which are used across various variables to denote responses like "Don't know/Not sure", "None", and "Refused", respectively.
+
+Additionally, the various categories within some variables were encoded in ways that could be optimized for clearer analysis and interpretation.
+
+Given this, I've resolved to recode these variables in a more systematic and unified manner. This involves transforming these special codes into **`NA`** to handle missing or ambiguous responses more appropriately and recoding categorical variables to make them more analytically meaningful:
+
+```{r}
+# Recoding process
+brf_data <- brf_data |>
+  # Recoding physical health days, considering 'None' as 0 and handling special codes
+  mutate(
+    Days_PhysHealth_Bad = case_when(
+      Days_PhysHealth_Bad == 88 ~ 0,  # 'None' as 0 days
+      Days_PhysHealth_Bad %in% c(77, 99) ~ NA_real_,  # 'Don't know/Not sure' and 'Refused' to NA
+      TRUE ~ Days_PhysHealth_Bad
+    ),
+    # Applying the same logic to mental health days
+    Days_MentHealth_Bad = case_when(
+      Days_MentHealth_Bad == 88 ~ 0,  # Similarly, 'None' as 0 days for mental health
+      Days_MentHealth_Bad %in% c(77, 99) ~ NA_real_,  # Converting special codes to NA
+      TRUE ~ Days_MentHealth_Bad
+    ),
+    # Recoding exercise variable from numeric codes to readable text
+    Exercise = case_when(
+      Exercise == 1 ~ "Yes",
+      Exercise == 2 ~ "No",
+      Exercise %in% c(7, 9) ~ NA_character_,  # Handling 'Don't know/Not Sure' and 'Refused'
+      TRUE ~ NA_character_  # Ensuring all other values are considered NA
+    ) |> factor(levels = c("Yes", "No")),
+    # Transforming marital status into a more interpretable format
+    Marital_Status = case_when(
+      Marital_Status == 1 ~ "Married",
+      Marital_Status == 2 ~ "Divorced",
+      Marital_Status == 3 ~ "Widowed",
+      Marital_Status == 4 ~ "Separated",
+      Marital_Status == 5 ~ "Never married",
+      Marital_Status == 6 ~ "Unmarried couple",
+      Marital_Status == 9 ~ NA_character_,  # 'Refused' responses converted to NA
+      TRUE ~ NA_character_  # Any unanticipated codes are also set to NA
+    ) |> factor(),
+    # Detailing employment status for a clearer understanding of the respondent's current situation
+    Employment_Status = case_when(
+      Employment_Status == 1 ~ "Employed for wages",
+      Employment_Status == 2 ~ "Self-employed",
+      Employment_Status == 3 ~ "Out of work for more than 1 year",
+      Employment_Status == 4 ~ "Out of work for less than 1 year",
+      Employment_Status == 5 ~ "Homemaker",
+      Employment_Status == 6 ~ "Student",
+      Employment_Status == 7 ~ "Retired",
+      Employment_Status == 8 ~ "Unable to work",
+      Employment_Status == 9 ~ NA_character_,  # Excluding 'Refused' from analysis
+      TRUE ~ NA_character_  # Treating unexpected values as missing
+    ) |> factor(),
+    # Specifying asthma status to identify current, former, and never diagnoses
+    Asthma_Status = case_when(
+      Asthma_Status == 1 ~ "Current",
+      Asthma_Status == 2 ~ "Former",
+      Asthma_Status == 3 ~ "Never",
+      Asthma_Status == 9 ~ NA_character_,  # Omitting 'Don't know/Not Sure Or Refused/Missing'
+      TRUE ~ NA_character_
+    ) |> factor(levels = c("Current", "Former", "Never")),
+    # Encoding race/ethnicity with comprehensive categories for demographic analysis
+    Race_Ethnicity = case_when(
+      Race_Ethnicity == 1 ~ "White",
+      Race_Ethnicity == 2 ~ "Black",
+      Race_Ethnicity == 3 ~ "Other",
+      Race_Ethnicity == 4 ~ "Multiracial",
+      Race_Ethnicity == 5 ~ "Hispanic",
+      Race_Ethnicity == 9 ~ NA_character_,  # 'Don't know/Not sure/Refused' are excluded
+      TRUE ~ NA_character_
+    ) |> factor(levels = c("White", "Black", "Other", "Multiracial", "Hispanic")),
+    # Clarifying gender 
+    Sex = case_when(
+      Sex == 1 ~ "Male",
+      Sex == 2 ~ "Female",
+      TRUE ~ NA_character_  # Any discrepancies are marked as NA
+    ) |> factor(),
+    # Grouping ages 
+    Age_Group = case_when(
+      Age_Group == 1 ~ "18 to 24",
+      Age_Group == 2 ~ "25 to 34",
+      Age_Group == 3 ~ "35 to 44",
+      Age_Group == 4 ~ "45 to 54",
+      Age_Group == 5 ~ "55 to 64",
+      Age_Group == 6 ~ "65 or older",
+      TRUE ~ NA_character_  # Addressing any missing or inconsistent data
+    ) |> factor(levels = c("18 to 24", "25 to 34", "35 to 44", "45 to 54", "55 to 64", "65 or older")),
+    # Categorizing BMI 
+    BMI_Category = case_when(
+      BMI_Category == 1 ~ "Underweight",
+      BMI_Category == 2 ~ "Normal Weight",
+      BMI_Category == 3 ~ "Overweight",
+      BMI_Category == 4 ~ "Obese",
+      TRUE ~ NA_character_  # Accounting for missing or unclear responses
+    ) |> factor(levels = c("Underweight", "Normal Weight", "Overweight", "Obese")),
+    # Evaluating smoking status 
+    Smoking_Status = case_when(
+      Smoking_Status == 1 ~ "Everyday smoker",
+      Smoking_Status == 2 ~ "Someday smoker",
+      Smoking_Status == 3 ~ "Former smoker",
+      Smoking_Status == 4 ~ "Never smoked",
+      Smoking_Status == 9 ~ NA_character_,  # Excluding non-responsive or uncertain data
+      TRUE ~ NA_character_
+    ) |> factor(levels = c("Everyday smoker", "Someday smoker", "Former smoker", "Never smoked")),
+    # Assessing general health to understand overall well-being
+    General_Health = case_when(
+      General_Health == 1 ~ "Good or Better",
+      General_Health == 2 ~ "Fair or Poor",
+      General_Health == 9 ~ NA_character_,  # Filtering out vague or declined answers
+      TRUE ~ NA_character_
+    ) |> factor(levels = c("Good or Better", "Fair or Poor"))
+  )
+```
+
+Having thought through the best way to make my dataset more intuitive and easy to work with for my analysis, including visualizations, I've decided to transform the `State` column, which currently contains FIPS codes, into actual state names and abbreviations.
+
+This approach will facilitate compatibility with visualization libraries that will require state names:
+
+```{r}
+# Create a mapping from FIPS codes to state names and abbreviations
+state_info <- data.frame(
+  FIPS = c(1, 2, 4, 5, 6, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 48, 49, 50, 51, 53, 54, 55, 56, 66, 72, 78),
+  State_Name = c("Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", "District of Columbia", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming", "Guam", "Puerto Rico", "Virgin Islands"),
+  State_Abbrev = c("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "GU", "PR", "VI"),
+  stringsAsFactors = FALSE
+)
+
+# Merge 'brf_data' with 'state_info' to include state names and abbreviations
+brf_data <- merge(brf_data, state_info, by.x = 'State', by.y = 'FIPS', all.x = TRUE)
+
+# Ensure 'State_Name' and 'State_Abbrev' are at the beginning of 'brf_data'
+brf_data <- brf_data[c("State_Name", "State_Abbrev", setdiff(names(brf_data), c("State_Name", "State_Abbrev", "State")))]
+
+# Review the structure of the updated dataset
+str(brf_data)
+```
+
+After successfully recoding variables and renaming the columns for clearer understanding, I'm now moving on to evaluate the extent of missing values (NA) across my dataset.
+
+### Assesing NA values
+
+I plan to calculate and visualize the percentage of NAs in each column to showcase the completeness of the data:
+
+```{r}
+# Visualizing the NA percentages across columns
+brf_data |> 
+  summarise(across(everything(), ~ mean(is.na(.)) * 100)) |> 
+  pivot_longer(everything(), names_to = "Column", values_to = "PercentageNA") |> 
+  ggplot(aes(x = reorder(Column, PercentageNA), y = PercentageNA, fill = PercentageNA)) +
+    geom_col() +
+    coord_flip() +
+    scale_fill_gradient(low = "lightgreen", high = "red") +
+    labs(x = "", y = "Percentage of NA", title = "Percentage of missing values by column") +
+    theme_minimal() +
+    theme(legend.title = element_blank(),
+          axis.title.x = element_text(vjust = -0.5)
+          ) +
+    scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, by = 10)) +
+    geom_text(aes(label = sprintf("%.1f%%", PercentageNA)), hjust = -0.1, color = "black", size = 3, check_overlap = TRUE)
+```
+
+This assessment reveals a promising level of data completeness, with the highest percentage of missing values found in the BMI_Category at 11.0%, while the Smoking_Status category shows 8%. The rest of the variables have considerably lower rates of missing values, which highlights the overall quality of the dataset for conducting robust analysis.
+
+My strategy is to maintain the current data structure, as imputation methods may not be suitable for these variables, and removing NA's would lead to the loss of valuable data in other key columns.
+
+### **Checking for outliers**
+
+After initially reviewing my dataset, I didn't spot any obvious outliers, particularly for variables like **`Days_PhysHealth_Bad`** and **`Days_MentHealth_Bad`**. These variables count the days of poor health reported in a month, so they're naturally limited to 30 days. To be thorough, I decided to quickly check these variables with some basic statistics:
+
+```{r}
+summary(brf_data$Days_PhysHealth_Bad)
+summary(brf_data$Days_MentHealth_Bad)
+```
+
+The data indeed aligns with the expected range of 0 to 30 days, reinforcing my initial belief that there aren't traditional outliers in these variables.
+
+Moving deeper into the exploratory data analysis (EDA), I will focus on the distribution of reported poor health days. Although the majority of respondents reported no poor health days, as evidenced by the median of 0, the mean values suggest there's a significant subset of the population experiencing a substantial number of poor health days. This skew in the distribution is intriguing and merits further investigation.
+
+------------------------------------------------------------------------
+
+## Exploratory Data Analysis (EDA)
+
+------------------------------------------------------------------------
+
+### Distribution histograms
+
+I'll start by creating basic distribution histograms for both the number of days with poor mental health and the number of days with poor physical health reported:
+
+```{r}
+# Plotting distribution histograms
+brf_data |>
+  pivot_longer(cols = c(Days_PhysHealth_Bad, Days_MentHealth_Bad), names_to = "Health_Type", values_to = "Days") |>
+  na.omit() |>
+  ggplot(aes(x = Days, fill = Health_Type)) +
+  geom_histogram(binwidth = 1, color = "black") +
+  facet_wrap(~Health_Type, scales = "free_y", labeller = as_labeller(c(Days_PhysHealth_Bad = "Physical Health", Days_MentHealth_Bad = "Mental Health"))) +
+  labs(title = "Distribution of days with poor health", x = "Number of days", y = "Frequency") +
+  scale_fill_brewer(palette = "Pastel2") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5),
+    axis.title.x = element_text(vjust = -0.5)
+  )
+
+```
+
+#### **Observations:**
+
+-   **Skewed Distribution**: The concentration of responses at 0 days across both histograms suggests a generally healthy population, corroborating the statistical summaries that showed a median of 0 for poor health days. This skewness towards the lower end of the scale is indicative of a population that, on the whole, reports few poor health days.
+
+-   **Reporting Patterns**: The regular spikes observed at 5-day intervals align with the data's range of 0 to 30 days. These spikes may reflect a tendency among respondents to round to the nearest workweek, which is a common pattern in self-reported health data.
+
+-   **Potential Chronic Issues**: The presence of a tail extending to the 30-day maximum reveals a subset of individuals reporting numerous poor health days, potentially indicative of chronic health issues. This finding is in line with the summary statistics that showed a mean value higher than the median, hinting at the existence of a significant population with more substantial health burdens.
+
+### Asthma's influence on physical and mental health
+
+After exploring poor health day distribution, I'm eager to delve into how asthma influences these numbers. My hypothesis is that asthma sufferers may report more poor health days due to its chronic nature, affecting both physical and mental well-being. I'll compare poor health days among current, former, and non-asthmatics to understand asthma's impact:
+
+```{r}
+# Boxplot comparing the number of poor physical and mental health days by asthma status
+brf_data |>
+  filter(!is.na(Asthma_Status), !is.na(Days_PhysHealth_Bad), !is.na(Days_MentHealth_Bad)) |>
+  pivot_longer(cols = c(Days_PhysHealth_Bad, Days_MentHealth_Bad), names_to = "Type", values_to = "Days") |>
+  mutate(Type = recode(Type, Days_PhysHealth_Bad = "Physical", Days_MentHealth_Bad = "Mental")) |>
+  ggplot(aes(x = Asthma_Status, y = Days, fill = Asthma_Status)) +
+    geom_boxplot() +
+    facet_wrap(~Type, scales = "free_y", nrow = 2) +
+    labs(title = "Comparison of poor health days by asthma status",
+         x = "Asthma status",
+         y = "Number of days") +
+    scale_fill_brewer(palette = "Pastel1") +
+    theme_minimal() +
+    theme(legend.title = element_blank(),
+          strip.background = element_blank(),
+          strip.text.x = element_text(size = 12),
+          plot.title = element_text(hjust = 0.5),
+          axis.title.x = element_text(vjust = -0.5)
+          )
+```
+
+#### **Observations:**
+
+-   **Current asthma sufferers**: Individuals with current asthma exhibit a higher median of poor health days for both physical and mental health, compared to those who have never had asthma. The interquartile range is broader, and there are several "outliers", indicating that some current asthma sufferers experience a significantly high number of poor health days.
+
+-   **Former asthma sufferers**: People who formerly had asthma also show a higher median of poor health days than those who have never had asthma, though the median and interquartile range for mental health days appear to be lower than for current sufferers. This suggests that while the condition's impact might decrease over time, its effects on health persist.
+
+-   **Never asthma sufferers**: This group has the lowest median of poor health days, indicating better overall physical and mental health compared to the other groups. The data points are also less spread out, showing fewer "outliers", which suggests more consistent health status among this group.
+
+-   **Comparison between physical and mental health**: While both physical and mental health are affected by asthma status, the impact on physical health seems to be more pronounced for current sufferers, as evidenced by the higher median and more "outliers".
+
+-   **Distribution and variability**: The distribution of poor health days is right-skewed for all groups and both health categories, with more days of good health reported overall. However, the variability is notably higher among current and former asthma sufferers.
+
+-   **Potential impact of asthma**: The boxplot implies a correlation between asthma status and an increased number of reported poor health days.
+
+The visualization supports the hypothesis that asthma affects both physical and mental health. However, for a more precise interpretation, statistical tests would be necessary to confirm if the observed differences are statistically significant.
+
+### Asthma prevalence in population
+
+Curious about the prevalence of asthma within the study sample, I'm inclined to visualize the proportions of current, former, and never asthmatics:
+
+```{r}
+# Create a pie chart with the distribution of asthma status
+brf_data |>
+  filter(!is.na(Asthma_Status)) |>
+  count(Asthma_Status) |>
+  mutate(Percentage = n / sum(n) * 100) |>
+  ggplot(aes(x = "", y = Percentage, fill = Asthma_Status)) +
+    geom_bar(stat = "identity", width = 1) +
+    coord_polar(theta = "y") +
+    labs(title = "Distribution of asthma status in the dataset (%)",
+         x = "",
+         y = "") +
+    scale_fill_brewer(palette = "Pastel1") +
+    theme_void() +
+    theme(legend.title = element_blank(),
+          plot.title = element_text(hjust = 0.5)) +
+    geom_text(aes(label = paste0(round(Percentage, 1), "%")), position = position_stack(vjust = 0.5))
+
+```
+
+#### **Observations:**
+
+-   **Current Asthma (10.3%)**: This group stands out because they've shown more bad health days in my earlier look.
+
+-   **Former Asthma (4.3%)**: Although not currently dealing with asthma, this group also reported more bad health days than those never diagnosed.
+
+-   **No Asthma (85.4%)**: The overwhelming majority of 85.4% with no history of asthma indicates a substantial imbalance in the dataset.
+
+The uneven distribution of asthma among the individuals I'm studying is significant. It highlights the need to carefully examine how asthma, whether active or not, may be associated with additional health issues. Next, I'll explore other factors that could be implicated and assess if these patterns remain consistent across various groups.
+
+### Asthma and age:
+
+I've chosen to investigate the intricacies of how different age groups intersect with asthma status:
+
+```{r}
+# Plotting distribution of asthma status within age groups
+brf_data |>
+  filter(!is.na(Asthma_Status), !is.na(Age_Group)) |>
+  group_by(Age_Group) |>
+  count(Asthma_Status) |>
+  mutate(Percentage = n / sum(n)) |>
+  ungroup() |>
+  ggplot(aes(x = Age_Group, y = Percentage, fill = Asthma_Status)) +
+  geom_bar(stat = "identity", position = "fill") +
+  geom_text(aes(label = scales::percent(Percentage, accuracy = 0.1)),
+            position = position_fill(vjust = 0.5), size = 3, color = "black") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(title = "Distribution of asthma status within age groups",
+       x = "Age group",
+       y = "Percentage",
+       fill = "Asthma status") +
+  scale_fill_brewer(palette = "Pastel1") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(vjust = -0.5),
+        legend.position = "right")
+```
+
+#### **Observations:**
+
+-   **Stable current asthma prevalence:** The relatively consistent percentage of current asthma across age groups indicates that it is a common chronic condition affecting all ages similarly.
+
+-   **Peak in current asthma among late adults:** The higher prevalence of current asthma in the "55 to 64" age group might indicate that the effects of chronic exposure to asthma risk factors, such as occupational hazards or smoking, could manifest more significantly in this age range.
+
+-   **Decrease in former asthma with age:** The decrease in the proportion of former asthmatics in the "65 or older" group could suggest that individuals who had asthma are either experiencing a re-emergence of symptoms, leading to a classification change back to current asthma, or there might be a decline in the recognition or reporting of past asthma status as individuals outlive the period they were affected by the condition. Additionally, changes in diagnostic criteria and medical understanding over time could mean that older generations were less likely to be diagnosed with asthma in the past.
+
+-   **Increase in never asthma in older age:** The increase in the proportion of individuals who have never had asthma in older age groups might reflect a survivor effect, where those with serious chronic conditions, including severe asthma, are underrepresented in older populations due to decreased life expectancy. Moreover, it could suggest that this age group has been less exposed to environmental and lifestyle factors that contribute to the development of asthma or that they benefit from historical improvements in public health and medical care.
+
+### Smoking habits and asthma
+
+Next, I'll be delving into researching the interaction between smoking and asthma:
+
+```{r}
+# Investigating the relationship between smoking status and asthma
+brf_data |>
+  filter(!is.na(Smoking_Status), !is.na(Asthma_Status)) |>
+  count(Smoking_Status, Asthma_Status) |>
+  group_by(Smoking_Status) |>
+  mutate(Percentage = n / sum(n)) |>  
+  ungroup() |>
+  mutate(Smoking_Status = factor(Smoking_Status, levels = rev(levels(Smoking_Status)))) |>
+  ggplot(aes(x = Smoking_Status, y = Percentage, fill = Asthma_Status)) +
+    geom_bar(stat = "identity", position = position_dodge(width = 0.7)) +
+    scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1), 
+      breaks = seq(0, 1, by = 0.25),  
+      limits = c(0, 1)  
+    ) +
+    geom_text(
+      aes(label = ifelse(Percentage > 0.01, scales::percent(Percentage, accuracy = 0.1), "")),
+      position = position_dodge(width = 0.7), 
+      vjust = -0.25, 
+      size = 3.5
+    ) +
+    scale_fill_brewer(palette = "Pastel1") +
+    labs(title = "Asthma status distribution by smoking status",
+         x = "Smoking Status", y = "Percentage of asthma status",
+         fill = "Asthma status") +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "bottom",
+      axis.title.x = element_text(vjust = -0.5)
+    )
+```
+
+#### **Observations:**
+
+**Everyday smokers**:
+
+-   Current asthma: 13.6% have current asthma, the highest among all groups, which suggests a strong association with daily smoking.
+
+-   Former asthma: 4.2% are former asthma sufferers, which could indicate either a resolution of asthma or less reporting among heavy smokers.
+
+-   Never asthma: 82.2% have never had asthma, the lowest proportion across the groups.
+
+**Someday smokers**:
+
+-   Current asthma: 12.2% have current asthma, slightly lower than everyday smokers.
+
+-   Former asthma: 5.0% are former asthma sufferers, which is higher than everyday smokers.
+
+-   Never asthma: 82.9%, similar to everyday smokers.
+
+**Former Smokers**:
+
+-   Current asthma: 10.8% have current asthma, indicating a possible lasting effect even after smoking cessation.
+
+-   Former asthma: 4.5% are former asthma sufferers, which is comparable to the 'Someday smoker' group.
+
+-   Never asthma: 84.7%, suggesting some improvement in asthma status after quitting smoking.
+
+-   **Never Smoked**:
+
+    -   Current asthma: 9.7% have current asthma, the lowest among all categories.
+
+    -   Former asthma: 4.3% are former asthma sufferers, the lowest percentage, implying that never starting to smoke is associated with a lower lifetime prevalence of asthma.
+
+    -   Never asthma: 86.0%, the highest rate, reinforcing the potential protective role of abstaining from smoking.
+
+In summary, there is a clear trend showing that individuals who have never smoked have the lowest prevalence of current and former asthma, while those who smoke more frequently report higher rates of current asthma. Former smokers have a reduced prevalence of current asthma compared to active smokers, which highlights the benefits of quitting smoking. However, they still have higher rates of current asthma than those who have never smoked, indicating potential long-term effects of smoking.
+
+### Gender and race relationships with asthma
+
+Given the insights from the previous analyses on how asthma correlates with aspects like age and smoking status, it's natural to wonder how gender and race might influence asthma prevalence and severity.
+
+These factors could offer additional layers of understanding, especially since asthma's impact can vary significantly across different demographic groups:
+
+```{r}
+# Create the visualization
+brf_data |>
+  filter(!is.na(Asthma_Status), !is.na(Sex), !is.na(Race_Ethnicity)) |>
+  group_by(Sex, Race_Ethnicity, Asthma_Status) |>
+  summarise(count = n(), .groups = "drop") |>
+  group_by(Sex, Race_Ethnicity) |>
+  mutate(Percentage = count / sum(count) * 100) |>
+  ggplot(aes(x = Asthma_Status, y = Percentage, fill = Asthma_Status)) +
+  geom_bar(stat = "identity") +
+  facet_grid(Sex ~ Race_Ethnicity) +
+  labs(title = "Distribution of asthma status by gender and race/ethnicity (%)",
+       x = "",
+       y = "Percentage",
+       fill = "Asthma Status") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_y_continuous(limits = c(0, 100)) +  
+  theme_minimal() +
+  theme(axis.text.x = element_blank()) +  
+  geom_text(aes(label = paste0(round(Percentage, 1), "%")),
+            position = position_stack(vjust = 0.5),
+            size = 2.8,
+            color = "black")
+```
+
+#### **Observations:**
+
+-   Among multiracial females, the prevalence of current asthma stands out as the highest at 20.3%, along with 3.9% for former asthma, indicating a significant health concern within this demographic group.
+
+-   Multiracial males also exhibit the highest prevalence of current asthma compared to other racial/ethnic groups, with 10.7% reporting current asthma.
+
+-   Hispanic females show a relatively high current asthma prevalence of 12.7%.
+
+-   White females have a current asthma prevalence of 12.9%, while black females have a slightly higher prevalence at 14.6%.
+
+-   Among other racial/ethnic groups, females exhibit varying asthma prevalence rates, ranging from 11.2% to 20.3%.
+
+Overall, these observations underscore the higher susceptibility of females to asthma across different racial/ethnic backgrounds, with multiracial females showing the highest prevalence.
+
+### Marital status relationships with asthma
+
+Continuing with the same approach, I decided to explore whether marital status has any correlation with asthma prevalence:
+
+```{r}
+# Create the visualization 
+brf_data |>
+  filter(!is.na(Asthma_Status), !is.na(Marital_Status)) |>
+  group_by(Marital_Status, Asthma_Status) |>
+  summarise(count = n(), .groups = "drop") |>
+  group_by(Marital_Status) |>
+  mutate(Percentage = count / sum(count) * 100) |>
+  ggplot(aes(x = Marital_Status, y = Percentage, fill = Asthma_Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Distribution of asthma status by marital status (%)",
+       x = "Marital status",
+       y = "Percentage",
+       fill = "Asthma status") +
+  scale_fill_brewer(palette = "Pastel1") +
+  theme_minimal() +
+  geom_text(aes(label = paste0(round(Percentage, 1), "%")),
+            position = position_dodge(width = 0.9),
+            vjust = -0.5,
+            size = 3,
+            color = "black") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5))
+```
+
+#### **Observations:**
+
+Exploring asthma prevalence across marital statuses reveals intriguing patterns and raises thought-provoking questions:
+
+-   Divorced individuals, with a noteworthy 13% current asthma rate and a substantial 4% former asthma history, seem to bear the weight of both past and present respiratory challenges. Could the stress of divorce contribute to prolonged respiratory issues, or does it reflect lifestyle changes post-divorce?
+
+-   Married individuals present the lowest current asthma rate at 9%, yet a surprising 4% still carry the burden of past respiratory struggles. Does the stability of marriage offer protection against ongoing respiratory issues, or do these individuals overlook past health concerns until they resurface?
+
+-   Separated individuals showcase the highest current asthma prevalence at 14%, indicating a pressing need for respiratory health management. However, with only 4.6% reporting former asthma, are these individuals facing new respiratory challenges post-separation, or was their past respiratory health less significant?
+
+-   Never-married individuals demonstrate a notable 12% current asthma rate, paralleled by a comparable 6% former asthma history. Does the absence of marital ties contribute to ongoing respiratory issues, or do lifestyle factors unique to this group play a role in their respiratory health?
+
+-   Widowed individuals exhibit a modest 10% current asthma rate and a lower 3% former asthma prevalence. Could the resilience developed through past experiences of loss contribute to better respiratory health outcomes, or are there other factors at play in this demographic?
+
+These insights shed light on the complex interplay between marital status and respiratory health, highlighting varying degrees of vulnerability and resilience across different life circumstances.
+
+### Weight factor
+
+As the "cherry on top" of my exploration into the factors influencing asthma, I am finally delving into the factor of weight and its impact. Its influence on asthma is the next piece of the puzzle I'm examining:
+
+```{r}
+# Investigating the relationship between weight category and asthma
+brf_data |>
+  filter(!is.na(BMI_Category), !is.na(Asthma_Status)) |>
+  mutate(BMI_Category = factor(BMI_Category)) |>
+  count(BMI_Category, Asthma_Status) |>
+  group_by(BMI_Category) |>
+  mutate(Percentage = n / sum(n)) |>  
+  ungroup() |>
+  ggplot(aes(x = BMI_Category, y = Percentage, fill = Asthma_Status)) +
+    geom_bar(stat = "identity", position = position_dodge(width = 0.7)) +
+    scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1), 
+      breaks = seq(0, 1, by = 0.25),  
+      limits = c(0, 1)  
+    ) +
+    geom_text(
+      aes(label = ifelse(Percentage > 0.01, scales::percent(Percentage, accuracy = 0.1), "")),
+      position = position_dodge(width = 0.7), 
+      vjust = -0.25, 
+      size = 3
+    ) +
+    scale_fill_brewer(palette = "Pastel1") +
+    labs(title = "Asthma status distribution by weight category",
+         x = "Weight сategory", y = "Percentage of asthma status",
+         fill = "Asthma status") +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "right",
+      axis.title.x = element_text(vjust = -0.7) 
+    )
+```
+
+#### **Observations:**
+
+-   Underweight individuals, despite being less prevalent, exhibit a noteworthy distribution in asthma status. Surprisingly, a substantial proportion report both current (9.3%) and former (4.6%) asthma, hinting at the potential impact of extreme weight loss on respiratory health.
+
+-   Normal weight individuals, while showing a lower overall asthma prevalence, still demonstrate a considerable percentage with current (7.9%) and former (4.2%) asthma.
+
+-   Overweight individuals, although commonly associated with increased respiratory risks, display a similar pattern to normal weight individuals, with a significant majority reporting never having had asthma (87.2%), alongside current (8.7%) and former (4.1%) asthma cases.
+
+-   Among obese individuals, there's a strikingly higher prevalence of current asthma (14.2%), underscoring the well-established link between obesity and respiratory conditions.
+
+**Analysis:**
+
+While the association between obesity and asthma is well-documented, the findings reveal intriguing nuances across weight categories. The unexpected prevalence of asthma among underweight individuals challenges conventional perceptions, indicating that extreme weight loss could also pose respiratory risks. Moreover, the distribution of asthma cases among normal weight and overweight individuals underscores the complexity of weight's influence on respiratory health, suggesting that factors beyond weight alone may contribute to asthma development.
+
+### Asthma's influence on health perception and exercise habits
+
+After delving into the primary factors influencing asthma prevalence, I decided to pivot my perspective by 180 degrees and explore the reverse influence and now I'm examining how it influences individuals' overall health perception and physical activity levels. It's intriguing to investigate how asthma affects well-being and exercise habits:
+
+```{r}
+# Creating a visualization for health perception by exercise and asthma status
+brf_data |>
+  filter(!is.na(Exercise), !is.na(General_Health)) |>
+  count(Exercise, General_Health) |>
+  group_by(Exercise) |>
+  mutate(Percentage = n / sum(n)) |>
+  ungroup() |>
+  ggplot(aes(x = Exercise, y = Percentage, fill = General_Health)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.7)) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 1), 
+    breaks = seq(0, 1, by = 0.25),  
+    limits = c(0, 1)  
+  ) +
+  geom_text(
+    aes(label = ifelse(Percentage > 0.01, scales::percent(Percentage, accuracy = 0.1), "")),
+    position = position_dodge(width = 0.7), 
+    vjust = -0.25, 
+    size = 3
+  ) +
+  scale_fill_brewer(palette = "Pastel2") +
+  labs(title = "Health perception by exercise and asthma status",
+       x = "Exercise", y = "Percentage of health status",
+       fill = "Health status") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right",
+    axis.title.x = element_text(vjust = -0.7) 
+  )
+```
+
+#### **Observations:**
+
+-   Among those who regularly engage in exercise, there's a clear trend towards positive health perception. Currently, 76.53% of asthma sufferers rate their health as "Good or Better," while only 23.47% rate it as "Fair or Poor." This trend holds true for former asthma sufferers and those who have never experienced asthma.
+
+-   However, among those who don't engage in exercise, there's a more varied perception of health. Among the group with current asthma, 47.21% rate their health as "Good or Better," while 52.79% see it as "Fair or Poor." Similar trends are observed among former asthma sufferers and those who have never had asthma.
+
+Regular physical activity seems to positively influence individuals' perception of their health, irrespective of their asthma status. While asthma might affect one's exercise capacity, those who remain physically active generally have a more favorable perception of their overall health.
+
+This implies that maintaining an active lifestyle could foster a positive outlook on health, even in the presence of asthma.
+
+### Asthma and employment status
+
+Building on previous findings, I'm now intrigued to explore how asthma influences an individual's productivity and work capacity:
+
+```{r}
+# Creating a visualization for employment status by asthma status 
+brf_data |>
+  filter(!is.na(Employment_Status), !is.na(Asthma_Status)) |>
+  count(Employment_Status, Asthma_Status) |>
+  group_by(Asthma_Status) |>
+  mutate(Percentage = n / sum(n)) |>
+  ungroup() |>
+  ggplot(aes(x = Asthma_Status, y = Percentage, fill = Employment_Status)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Employment status by asthma status",
+       x = "Asthma status",
+       y = "Percentage of employment status",
+       fill = "Employment status") +
+  geom_text(aes(label = ifelse(Percentage > 0.05, paste0(round(Percentage*100, 1), "%"), "")),
+            position = position_stack(vjust = 0.5),
+            color = "black",
+            size = 3) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(vjust = -0.7),
+        legend.position = "right")
+```
+
+#### **Observations:**
+
+-   Employment for wages: The contrast in employment rates is striking---48% of former asthma sufferers are employed for wages, compared to 39.6% of those currently with asthma and 43.1% of individuals without asthma. This disparity underscores the potential challenge asthma poses to maintaining regular employment.
+
+-   Inability to work: The fact that 14.3% of those with current asthma are unable to work starkly contrasts with the 6.7% of former sufferers and even more so with the 5.1% of those who have never experienced asthma. This highlights the substantial impact of asthma on employment capabilities and workforce participation.
+
+**Conclusion**: The comparison reveals significant insights into how asthma affects employment. Individuals with current asthma face notable challenges in the workforce, evidenced by lower employment rates and a higher percentage of being unable to work, compared to both former sufferers and those never affected.
+
+### Asthma's map
+
+To avoid bias and reliance solely on absolute figures, I'll assess the balance of my dataset by examining state representation of asthma respondents by mapping the distribution across the continental United States:
+
+```{r}
+# Drawing a map illustrating the distribution of all asthma respondents by state
+# Filtering the states map to include only relevant states and joining asthma data, then plotting the map with asthma respondent counts
+states_map |>
+  filter(STUSPS %in% intersect(unique(brf_data$State_Abbrev), STUSPS)) |>
+  filter(STUSPS %in% c("AL", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", 
+                       "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", 
+                       "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", 
+                       "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", 
+                       "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", 
+                       "WV", "WI", "WY")) |>
+  left_join(
+    brf_data |>
+      filter(!is.na(Asthma_Status)) |>
+      group_by(State_Abbrev) |>
+      summarise(Count = n(), .groups = "drop"),
+    by = c("STUSPS" = "State_Abbrev")
+  ) |>
+  mutate(
+    centroids_df = st_centroid(geometry) |>
+                     st_coordinates() |>
+                     as.data.frame() |>
+                     setNames(c("x", "y")),
+    STUSPS = as.character(STUSPS)
+  ) |>
+  select(-geometry)  |>
+  ggplot() +
+  geom_sf(aes(fill = Count)) +
+  geom_text(aes(x = centroids_df$x, y = centroids_df$y, label = STUSPS), size = 2) +
+  scale_fill_gradient(name = "Number of respondents", low = "lightyellow", high = "darkorange") +
+  labs(title = "Distribution of asthma respondents by state") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text = element_blank(),
+        axis.title = element_blank())
+```
+
+The map distinctly highlights that Washington state stands out with a considerably higher number of respondents than other states, signaling a significant imbalance in my dataset.
+
+Notably, even populous states like New York, Ohio, and Texas are less represented compared to Washington. This discrepancy emphasizes the flaw in relying on absolute figures for analysis, as they would mislead the understanding of real lasthma's distribution.
+
+To rectify this, my analysis should focus on the percentage of asthma respondents in relation to the total observations for each state. Therefore, I decided to examine the percentage ratio between current asthma cases, taking into account the number of observations for each state of continental USA:
+
+```{r}
+# Drawing a map illustrating the percentage distribution of current asthma cases by state
+states_map |>
+  filter(STUSPS %in% intersect(unique(brf_data$State_Abbrev), STUSPS)) |>
+  filter(STUSPS %in% c("AL", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", 
+                       "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", 
+                       "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", 
+                       "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", 
+                       "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", 
+                       "WV", "WI", "WY")) |>
+  left_join(
+    brf_data |>
+      filter(!is.na(Asthma_Status)) |>
+      group_by(State_Abbrev) |>
+      summarise(
+        Total_Asthma = n(),
+        Current_Asthma = sum(Asthma_Status == "Current", na.rm = TRUE),
+        Percentage = (Current_Asthma / Total_Asthma) * 100,
+        .groups = "drop"
+      ),
+    by = c("STUSPS" = "State_Abbrev")
+  ) |>
+  mutate(
+    centroids_df = st_centroid(geometry) |>
+                     st_coordinates() |>
+                     as.data.frame() |>
+                     setNames(c("x", "y")),
+    STUSPS = as.character(STUSPS)
+  ) |>
+  select(-geometry) |>
+  ggplot() +
+  geom_sf(aes(fill = Percentage)) +
+  geom_text(aes(x = centroids_df$x, y = centroids_df$y, label = STUSPS), size = 2) +
+  scale_fill_gradient(name = "Percentage", low = "lightgreen", high = "darkred") +
+  labs(title = "Percentage distribution of current asthma cases by state") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text = element_blank(),
+        axis.title = element_blank())
+```
+
+As evident from this insightful visualization, the perspective has shifted significantly as I'm assessing the true ratio, not just the raw numbers, leading to a distinct interpretation.
+
+The central part of the United States, particularly Nebraska, stands out with a lower percentage of current asthma cases compared to other states. Conversely, Oklahoma, West Virginia, and Maine distinctly highlight the opposite trend.
+
+Continuing further, I'm now going to examine not just the overall trend but the actual numbers by selecting the 5 states with the highest asthma prevalence and the 5 states with the lowest asthma prevalence. This time, I want to consider the total asthma cases, including both current and former cases:
+
+```{r}
+# Bar plot showing the top and bottom 5 states by current and former asthma prevalence.
+brf_data |>
+  filter(!is.na(Asthma_Status)) |>
+  group_by(State_Name) |>
+  summarise(
+    Total_Cases = n(), 
+    Asthma_Cases = sum(Asthma_Status %in% c("Current", "Former")),
+    Percentage_Asthma = (Asthma_Cases / Total_Cases) * 100
+  ) |>
+  ungroup() |>
+  mutate(State_Color = ifelse(Percentage_Asthma <= quantile(Percentage_Asthma, probs = 0.2), "lightgreen", "darkred")) |>
+  arrange(Percentage_Asthma) |>
+  slice(c(1:5, (n()-4):n())) |>
+  ggplot(aes(x = reorder(State_Name, Percentage_Asthma), y = Percentage_Asthma, fill = State_Color)) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = paste0(round(Percentage_Asthma, 1), "%")), hjust = -0.1, size = 3, color = "black") +
+    coord_flip() +
+    scale_fill_manual(values = c("darkred" = "darkred", "lightgreen" = "lightgreen")) +
+    labs(title = "Top and bottom 5 States by current and former asthma status",
+         x = "",
+         y = "Percentage of current and former asthma status") +
+         expand_limits(y = c(0, 20)) + 
+    theme_minimal() +
+    theme(axis.title.x = element_text(vjust = -0.7),
+        legend.position = "none")
+
+```
+
+Firstly, some new territories appeared that were not represented on the continental map of the USA. In particular, Puerto Rico emerges as the absolute "outperformer" with 18.9% of current and former asthmatics, while Guam and the Virgin Islands also stand out, albeit on the opposite end of the spectrum. Guam registers at 10.7%, almost half the prevalence of Puerto Rico.
+
+Turning to the continental U.S., Oklahoma takes the "lead", followed by Tennessee, West Virginia, and Rhode Island. On the flip side, among the lowest values within the continental U.S. stand out Nebraska, South Dakota, and surprisingly, Illinois, at least for me.
+
+Given the substantial dataset imbalance, it's crucial to interpret these findings cautiously. Nonetheless, they still offer valuable insights into asthma prevalence across regions.
+
+------------------------------------------------------------------------
+
+## Preparatory statistical analysis
+
+------------------------------------------------------------------------
+
+Now that I've completed the exploratory data analysis, I'm moving to the association analysis of categorical variables phase.
+
+### **Association analysis of categorical variables**
+
+Since most of my dataset consists of categorical variables, with just two continuous variables related to health days not directly influencing asthma, my focus is on identifying key associations among these categorical factors. By identifying these associations using measures like Cramér's V and visualizing them through heatmaps, I aim to select the most relevant categorical predictors for further modeling.
+
+Let's take a fresh look at the variables again:
+
+```{r}
+# Checking variables names and structure
+str(brf_data)
+```
+
+Following my exploratory data analysis, I decided to select variables that showed preliminary associations with asthma status. These variables include **`Race_Ethnicity`**, **`Sex`**, **`BMI_Category`**, and **`Smoking_Status`**.
+
+#### **Cramer's V**
+
+My next step involves calculating Cramer's V to quantify the strength of association between these variables and asthma status:
+
+```{r}
+# Function to calculate Cramer's V for specified predictors against a response variable
+calculate_cramers_v <- function(data) {
+  predictors <- c("Race_Ethnicity", "Sex", "BMI_Category", "Smoking_Status")
+  sapply(predictors, function(predictor) {
+    tbl <- data |> 
+      select(Asthma_Status, all_of(predictor)) |> 
+      na.omit() |> 
+      table()
+    
+    chi2 <- suppressWarnings(chisq.test(tbl)$statistic)
+    n <- sum(tbl)
+    phi2 <- chi2 / n
+    minDim <- min(dim(tbl) - 1)
+    cramers_v <- sqrt(phi2 / minDim)
+    return(cramers_v)
+  }, simplify = "vector", USE.NAMES = TRUE)
+}
+
+# Apply the function to the data frame 
+cramers_v_values <- calculate_cramers_v(brf_data)
+
+# Сleaning variable names from unwanted suffixes
+names(cramers_v_values) <- gsub("\\.X-squared", "", names(cramers_v_values))
+
+# Create the heatmap from cramers_v_values 
+cramers_v_values |>
+  enframe(name = "Variable", value = "CramersV") |>
+  mutate(Variable = factor(Variable, levels = names(cramers_v_values))) |>
+  ggplot(aes(x = Variable, y = "", fill = CramersV)) +
+    geom_tile(color = "grey") +
+    geom_text(aes(label = sprintf("%.3f", CramersV)), vjust = -0.3) + 
+    scale_fill_gradient(low = "lightblue", high = "steelblue", name = "Cramer's V") +
+    theme_minimal() +
+    labs(title = "Heatmap of Cramer's V values", x = "", y = "") +
+    theme(axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),  
+          plot.title = element_text(hjust = 0.5),
+          legend.position = "right")
+```
+
+The Cramer's V calculations revealed weak associations:
+
+-   **`Race_Ethnicity`** showed a very weak association (0.028), suggesting minimal impact on asthma status within this dataset.
+
+-   **`Sex`** presented a slightly stronger, yet still weak association (0.098), indicating a small difference in asthma prevalence between genders.
+
+-   **`BMI_Category`** also showed a weak association (0.067), hinting at a marginal relationship between BMI category and asthma.
+
+-   **`Smoking_Status`** had a very weak association with `Asthma_Status` (0.028), comparable to that of `Race_Ethnicity`, implying minimal influence of smoking status on asthma.
+
+Despite these low values indicating weak statistical associations, such findings are not negligible in health research as they provide clues towards understanding asthma's complex etiology.
+
+#### Chi-squared tests
+
+While Cramer's V provided a measure of how strong the associations between various factors and asthma status are, I decided to take a step further by conducting chi-squared tests. My goal is to understand the statistical significance of these associations.
+
+```{r}
+# Function to conduct chi-squared tests and obtain p-values
+conduct_chi_squared_tests <- function(data, response_var, predictors) {
+  predictors |>
+    lapply(function(predictor) {
+      # Create contingency table
+      tbl <- table(data[[response_var]], data[[predictor]], useNA = "no")
+      # Perform chi-squared test
+      test <- tryCatch(chisq.test(tbl), error = function(e) NA)
+      if (!is.null(test$p.value)) {
+        p_value <- ifelse(is.numeric(test$p.value), test$p.value[1], NA)
+      } else {
+        p_value <- NA
+      }
+      return(data.frame(Variable = predictor, PValue = p_value))
+    }) |>
+    bind_rows() |>
+    mutate(Significance = PValue < 0.05, 
+           Label = ifelse(is.na(PValue), "NA", sprintf("%.2e", PValue)))  
+}
+
+# Applying the function to a data frame and filtering significant results
+brf_data |> 
+  conduct_chi_squared_tests("Asthma_Status", c("Race_Ethnicity", "Sex", "BMI_Category", "Smoking_Status")) |>
+  mutate(Variable = factor(Variable, levels = c("Race_Ethnicity", "Sex", "BMI_Category", "Smoking_Status"))) |>
+  filter(Significance) |>
+  ggplot(aes(x = Variable, y = -log10(PValue))) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = Label), vjust = 5, size = 3) +  
+  labs(title = "Chi-Squared test P-Values for various variables",
+       subtitle = "Only significant p-values (p < 0.05) are displayed",
+       x = "") +  
+  theme_minimal() +
+  theme(axis.title.y = element_blank(),  
+        axis.text.y = element_blank(),   
+        axis.ticks.y = element_blank(),  
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) 
+
+```
+
+The chi-squared test results confirm that these associations are not due to chance, even if the strength of association is not strong. This is particularly true in large datasets where even small effects can be detected as significant due to the power of the test.
+
+The exceptionally small p-values for `Race_Ethnicity`, `Sex`, `BMI_Category`, and `Smoking_Status` strongly reject the null hypothesis, supporting the existence of some level of association with asthma status.
+
+#### Summary:
+
+In summary, while the associations are statistically significant, their practical significance may be limited due to their weak strength. However, these variables could still be relevant in the context of asthma's multifactorial nature. These findings suggest that when constructing a predictive model for asthma, including these variables could still provide value.
+
+------------------------------------------------------------------------
+
+## Logistic regression
+
+------------------------------------------------------------------------
+
+For my analysis, I've opted for logistic regression to investigate factors contributing to ever experiencing asthma, consolidating "`Current`" and "`Former`" asthma statuses into a single "`Ever`" category.
+
+### Variables preparation
+
+I'm transitioning to the variables preparation stage by transforming `Asthma_Status` into a binary variable. This simplifies the outcome for logistic regression, focusing solely on asthma occurrence.
+
+Simultaneously, I'm preparing predictor variables by filtering out incomplete cases to ensure analysis robustness and setting reference categories for each categorical predictor, based on initial exploratory insights. Other columns in **`brf_data`** are not contributing to my current analysis, so I choose to exclude them during the preparation phase as well:
+
+```{r}
+# Variables preparation with selected predictors
+brf_data_prepared <- brf_data |>
+  # Select only relevant predictors and the outcome variable
+  select(Asthma_Status, Race_Ethnicity, Sex, BMI_Category, Smoking_Status) |>
+  # Transform Asthma_Status into a binary outcome variable
+  mutate(Asthma_Binary = ifelse(Asthma_Status %in% c("Current", "Former"), "Ever", "Never")) |>
+  mutate(Asthma_Binary = factor(Asthma_Binary, levels = c("Never", "Ever"))) |>
+  # Filter out NAs to ensure complete cases for analysis
+  filter(!is.na(Asthma_Binary), !is.na(Race_Ethnicity), !is.na(Sex), !is.na(BMI_Category), !is.na(Smoking_Status)) |>
+  # Set reference categories for predictors, guided by my exploratory insights
+  mutate(
+    Race_Ethnicity = relevel(Race_Ethnicity, ref = "Other"), # I chose "Other" as the reference category because it had the lowest combined number of "Current" and "Former" asthma cases among the racial/ethnic groups in the dataset
+    Sex = relevel(Sex, ref = "Male"), # Same idea since Female has a higher proportion of asthma cases
+    BMI_Category = relevel(BMI_Category, ref = "Normal Weight"),
+    Smoking_Status = relevel(Smoking_Status, ref = "Never smoked")
+  ) |>
+  # Ensure to drop the original Asthma_Status as we now use Asthma_Binary
+  select(-Asthma_Status)
+
+# Check result
+str(brf_data_prepared)
+```
+
+My **`brf_data_prepared`** dataset now consists of 369,162 observations and 5 variables, each correctly formatted as factors with the desired reference levels.
+
+### Сhecking assumptions
+
+Here's what I found relevant to my case:
+
+-   **Binary outcome**: My outcome variable is appropriately binary.
+
+-   **Independence**: The data points are independent of each other.
+
+-   **Linearity**: Not a concern for my categorical predictors.
+
+-   **No multicollinearity**: Low associations between predictors suggest minimal multicollinearity.
+
+-   **Large sample size**: My dataset is sufficiently large for reliable analysis.
+
+### **Fitting** model
+
+Given the imbalance in my dataset between healthy individuals and those with asthma, my model's goal is observational, not predictive. The low associations and imbalance reduce predictive power, so splitting into training and test sets is unnecessary. Here I'm focusing on exploring and interpreting the data's patterns:
+
+```{r}
+# Fit the logistic regression model
+logistic_model <- glm(Asthma_Binary ~ Race_Ethnicity + Sex + BMI_Category + Smoking_Status, 
+                      data = brf_data_prepared, family = binomial())
+
+# Display the summary of the model to interpret the results
+summary(logistic_model)
+```
+
+#### Observations:
+
+**Race/Ethnicity**:
+
+-   **White**: The coefficient is 0.021992, but it's not statistically significant (p = 0.322222), suggesting little to no difference in asthma likelihood compared to the reference category ("Other"). As a reminder, I chose "Other" as the reference category because it had the lowest combined number of "Current" and "Former" asthma cases among the racial/ethnic groups in the dataset.
+
+-   **Black**: With a coefficient of 0.092307 and p-value \< 0.001, Black individuals are more likely to have had asthma compared to the "Other" category, indicating a statistically significant association.
+
+-   **Multiracial**: The most substantial effect among racial/ethnic groups, with a coefficient of 0.518629 and a highly significant p-value, indicates a notably higher likelihood of having had asthma.
+
+-   **Hispanic**: Similar to Black individuals, Hispanics show a significantly higher likelihood of having had asthma (coefficient = 0.095453, p \< 0.001) compared to the "Other" category.
+
+**Sex**:
+
+-   **Female**: The coefficient of 0.464200 is highly significant, indicating that females are significantly more likely to have had asthma than males. This is one of the most pronounced effects in the model.
+
+**BMI category**:
+
+-   **Underweight**: Shows a slight increase in the likelihood of having had asthma (coefficient = 0.091481, p = 0.015817), indicating a significant but relatively small effect.
+
+-   **Overweight**: With a coefficient of 0.124496 and highly significant p-value, being overweight is associated with an increased likelihood of having had asthma.
+
+-   **Obese**: The strongest association within BMI categories, the coefficient of 0.550511 signifies a much higher likelihood of having had asthma, highlighting the significant impact of obesity.
+
+**Smoking Status**:
+
+-   **Everyday smoker**: A coefficient of 0.289781 points to a significantly higher likelihood of having had asthma, underlining the adverse effects of regular smoking.
+
+-   **Someday smoker**: This group also shows an increased likelihood of having had asthma (coefficient = 0.265566), though slightly less than everyday smokers.
+
+-   **Former smoker**: With a coefficient of 0.114776, former smokers have an increased likelihood of having had asthma compared to never smokers, but the effect is less pronounced than for current smokers.
+
+Given my focus on exploratory research, I'm leaning towards simplifying the evaluation of my logistic regression model.
+
+#### **Translate coefficients**
+
+I'll convert the model's coefficients into odds ratios to make the findings more tangible, showing how different factors influence the likelihood of having asthma:
+
+```{r}
+exp(coef(logistic_model))
+
+```
+
+Here's a brief recap of my findings:
+
+**Race/Ethnicity**:
+
+-   **White**: With an odds ratio of 1.022, there's a slight increase in the likelihood of having asthma compared to the "Other" category.
+
+-   **Black**: An odds ratio of 1.097 suggests a moderately higher likelihood of asthma.
+
+-   **Multiracial**: This group shows the most significant increase, with an odds ratio of 1.680.
+
+-   **Hispanic**: An odds ratio of 1.100 also indicates a higher likelihood of asthma compared to "Other".
+
+**Sex**:
+
+-   **Female**: A notable increase in the likelihood of having asthma, with an odds ratio of 1.591, marking one of the strongest effects in my model.
+
+**BMI category**:
+
+-   **Underweight**: A slight increase in asthma likelihood with an odds ratio of 1.096.
+
+-   **Overweight** and **Obese**: More significant increases in likelihood, with odds ratios of 1.133 and 1.734, respectively.
+
+**Smoking status**:
+
+-   **Everyday smoker** and **someday smoker**: Increased likelihood of asthma, with odds ratios of 1.336 and 1.304.
+
+-   **Former smoker**: A smaller increase, with an odds ratio of 1.122.
+
+These odds ratios provide a straightforward interpretation of the factors associated with asthma. Being multiracial, female, obese, or a smoker notably increases this likelihood.
+
+#### **Examples for illustration**
+
+By calculating the predicted probabilities for hypothetical profiles, I can visually demonstrate the impact of various predictors on asthma likelihood. This approach visualizes a range of profiles, emphasizing diversity and including both high-risk and low-risk scenarios based on my model's findings:
+
+```{r}
+# Define a diverse set of hypothetical profiles
+profiles <- data.frame(
+  Race_Ethnicity = factor(c("Multiracial", "White", "Black", "Hispanic", "Multiracial", "Black", "White", "Hispanic", "Black", "Black"), 
+                          levels = c("Other", "White", "Black", "Multiracial", "Hispanic")),
+  Sex = factor(c("Female", "Female", "Female", "Male", "Female", "Male", "Female", "Female", "Male", "Female"), 
+               levels = c("Male", "Female")),
+  BMI_Category = factor(c("Obese", "Underweight", "Normal Weight", "Overweight", "Obese", "Obese", "Normal Weight", "Obese", "Normal Weight", "Overweight"), 
+                        levels = c("Normal Weight", "Underweight", "Overweight", "Obese")),
+  Smoking_Status = factor(c("Everyday smoker", "Never smoked", "Former smoker", "Someday smoker", "Never smoked", "Everyday smoker", "Former smoker", "Never smoked", "Someday smoker", "Never smoked"), 
+                          levels = c("Never smoked", "Everyday smoker", "Someday smoker", "Former smoker"))
+)
+
+# Calculating predicted probabilities
+profiles$Predicted_Probability <- predict(logistic_model, newdata = profiles, type = "response")
+
+# Sorting profiles by their predicted probabilities
+profiles <- profiles[order(-profiles$Predicted_Probability),]
+
+# Creating profile descriptions
+profiles$Description <- paste(profiles$Race_Ethnicity, profiles$Sex, profiles$BMI_Category, profiles$Smoking_Status, sep=", ")
+
+# Visualizing the predicted probabilities 
+ggplot(profiles, aes(x = reorder(Description, -Predicted_Probability), y = Predicted_Probability)) +
+  geom_bar(stat = "identity", fill = "darkgrey") +  
+  geom_text(aes(label = sprintf("%.3f", Predicted_Probability)), position = position_dodge(width = 0.9), hjust = 1.1) +
+  coord_flip() +
+  labs(title = "Predicted probability of having asthma",
+       x = "",
+       y = "") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+#### Observations:
+
+-   **Highest risk**: The **Multiracial, Female, Obese, Everyday smoker** profile stands out with the highest predicted probability of **0.363**, highlighting the profound impact of combining factors such as race/ethnicity, gender, obesity, and smoking habits on the likelihood of having asthma.
+
+-   **Significant factors**: Across various profiles, obesity and smoking consistently emerge as critical determinants of asthma risk. This is not only evident in the profile with the highest risk but also in others, such as the **Black, Male, Obese, Everyday smoker** with a probability of **0.189**, underscoring the role of these factors in asthma risk across different demographics.
+
+-   **Gender and Race/Ethnicity influences**: The analysis reveals that females, particularly from multiracial and Hispanic backgrounds and who are obese, have a heightened risk. This is reflected in the probabilities of **0.299** for **Multiracial, Female, Obese, Never smoked** and **0.218** for **Hispanic, Female, Obese, Never smoked**, illustrating the intersectional nature of asthma risk where gender and race/ethnicity intersect with obesity.
+
+-   **Smoking status**: Smoking, both current and former, markedly increases asthma risk across all BMI categories and races/ethnicities. This reinforces the detrimental impact of smoking on respiratory health, irrespective of one's weight or racial/ethnic background.
+
+-   **Insight on underweight individuals**: Interestingly, the **White, Female, Underweight, Never smoked** profile presents a notable probability of **0.141**. This observation is particularly enlightening, given that my exploratory data analysis (EDA) identified being underweight as a potential asthma risk factor, akin to being overweight.
+
+-   **Comparative lower risk**: Among the profiles analyzed, the **Black, Male, Normal Weight, Someday smoker** emerges with the lowest predicted probability of **0.116**. This suggests that maintaining a normal weight and engaging in less frequent smoking may be associated with a lower risk of asthma.
+
+### **Model summary**
+
+Evaluating my logistic regression model, I looked at the Akaike Information Criterion (AIC) and the drop in deviance from null to residual. The AIC stands at 304235, suggesting a good balance between model complexity and fit. The significant decrease from null deviance (309978) to residual deviance (304211) confirms that my predictors effectively explain variations in asthma likelihood. This indicates a substantial improvement in fit over a model without predictors, affirming the model's explanatory power for understanding asthma risk factors.
+
+------------------------------------------------------------------------
+
+## Conclusion
+
+------------------------------------------------------------------------
+
+Throughout my comprehensive analysis of the "**2022 BRFSS Survey Data**," I embarked on an in-depth exploration into asthma's prevalence and the myriad factors influencing it, spanning individual behaviors to broader socio-demographic dimensions. Here's a synthesis of my key findings, extending from exploratory data analysis to intricate logistic regression insights:
+
+-   **Health Days and Asthma's Impact:** My investigation highlighted a skewed distribution of reported poor health days, emphasizing the significant burden asthma places on both physical and mental well-being. Notably, individuals with current asthma experienced a greater number of poor health days, underlining the chronic nature of asthma.
+
+-   **Prevalence Across Age and Smoking Habits:** Asthma prevalence proved stable across age groups, yet notably peaked among adults aged 55 to 64, suggesting the effects of long-term exposure to risk factors. The analysis also underscored a strong correlation between smoking habits and asthma prevalence, reinforcing the critical impact of smoking on respiratory health.
+
+-   **Influence of Gender, Race/Ethnicity, and Weight:** The logistic regression model revealed that multiracial females, those classified as obese, and individuals with a history of smoking are at the highest risk of asthma. These findings call attention to the nuanced roles gender, race/ethnicity, and BMI play in asthma risk, necessitating targeted public health interventions.
+
+-   **Socio-Demographic Factors:** Exploring asthma's prevalence in relation to marital status unveiled intriguing patterns, suggesting potential stress-related impacts of divorce and the protective effects of marital stability on asthma prevalence. Moreover, the complex relationship between weight and asthma challenges conventional wisdom, indicating that both underweight and obesity are significant factors.
+
+-   **Lifestyle's Role:** Regular physical activity emerged as a beneficial factor, positively influencing health perceptions among asthma sufferers. Conversely, the analysis revealed asthma's considerable impact on employment status, with a higher percentage of current sufferers unable to work, highlighting the condition's socio-economic implications.
+
+-   **Geographic Variations:** Mapping asthma prevalence across the United States illuminated significant regional differences, pointing to the influence of environmental factors and access to healthcare on asthma rates.
+
+These insights, distilled from my data-driven journey, underscore the multifactorial nature of asthma and the intricate interplay of genetic, environmental, and lifestyle factors in its prevalence and impact. My findings not only advance our understanding of asthma but also emphasize the critical role of nuanced, data-driven research in informing effective public health strategies and interventions.
+
+Thank you!
+
+------------------------------------------------------------------------
