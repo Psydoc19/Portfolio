@@ -28,7 +28,7 @@ This signifies a robust ability to correctly identify potential employee turnove
 
 ## Conclusion
 
-The Salifort Motors Project offers invaluable insights into optimizing employee satisfaction, retention, and overall organizational performance. Key recommendations encompass revising workload distribution, refining performance evaluation criteria, enhancing policy transparency, and fostering a culture of open communication and feedback. Future iterations of this initiative could explore integrating additional data sources, incorporating sentiment analytics, and leveraging advanced segmentation techniques to tailor interventions specific to distinct employee cohorts. By embracing these insights and recommendations, Salifort Motors can cultivate a motivated, engaged, and high-performing workforce, poised for sustainable growth and success in the competitive automotive landscape.
+The Salifort Motors project offers invaluable insights into optimizing employee satisfaction, retention, and overall organizational performance. Key recommendations encompass revising workload distribution, refining performance evaluation criteria, enhancing policy transparency, and fostering a culture of open communication and feedback. Future iterations of this initiative could explore integrating additional data sources, incorporating sentiment analytics, and leveraging advanced segmentation techniques to tailor interventions specific to distinct employee cohorts. By embracing these insights and recommendations, Salifort Motors can cultivate a motivated, engaged, and high-performing workforce, poised for sustainable growth and success in the competitive automotive landscape.
 
 ## Get in touch
 
