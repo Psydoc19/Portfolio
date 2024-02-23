@@ -8,7 +8,7 @@ In this comprehensive study, I employed EDA, statistical analysis and logistic r
 
 All necessary files for the project to run smoothly are located in its directory.
 
-Simply launch the R Quattro Markdown file named `BRFSS.qmd` and enjoy!
+Simply launch the R Quarto documents file named `BRFSS.qmd` and enjoy!
 
 Alternatively, for non-technical users, you can use the '`Asthma insights/ Unveiling patterns and predictors in R.pdf`' file.
 
