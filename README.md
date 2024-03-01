@@ -15,7 +15,7 @@ As you navigate through this repository, you'll encounter a variety of projects 
 
 - **[Salifort Motors in Python](Salifort-Motors-analysis-Python)**: This data analysis embarked on a comprehensive exploration of employee workload, satisfaction, and potential enhancement areas within Salifort Motors.
 
-- **[Data Cleaning and Preparation in R](Data)**: for the "Human Activity Recognition Using Smartphones" project. This project involves merging datasets, extracting mean and standard deviation measurements, assigning descriptive activity names, and creating a tidy dataset containing the average value of each variable for each activity and subject. The resulting dataset is saved as a tidy_dataset.txt file.
+- **[Data Cleaning and Transformation Project in R](Data-Cleaning-and-Transformation-Project-R)**: for the "Human Activity Recognition Using Smartphones" project. This project involves merging datasets, extracting mean and standard deviation measurements, assigning descriptive activity names, and creating a tidy dataset containing the average value of each variable for each activity and subject. The resulting dataset is saved as a tidy_dataset.txt file.
 
 
 ## Get in touch
