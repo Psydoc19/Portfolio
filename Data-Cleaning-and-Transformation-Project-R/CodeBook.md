@@ -1,10 +1,12 @@
-### Code Book
+# Data Cleaning and Transformation Project in R
 
-#### Data Source
+## Code Book
+
+### Data Source
 
 The dataset used for this project is the ["Human Activity Recognition Using Smartphones" dataset](https://archive.ics.uci.edu/dataset/240/human+activity+recognition+using+smartphones) from the UCI Machine Learning Repository.
 
-#### Variables
+### Variables
 
 -   **Subject:** An identifier for the subject who performed the activity. Integer values ranging from 1 to 30.
 
@@ -12,7 +14,7 @@ The dataset used for this project is the ["Human Activity Recognition Using Smar
 
 -   **Other Variables:** These variables represent the mean and standard deviation of various features collected from the smartphone accelerometer and gyroscope sensors during the subjects' activities. For example, "tBodyAcc-mean()-X" represents the mean value of the body acceleration signal in the X-direction.
 
-#### Transformations
+### Transformations
 
 1.  **Merge Training and Test Datasets:** The training and test datasets were merged to create one dataset.
 
@@ -24,11 +26,11 @@ The dataset used for this project is the ["Human Activity Recognition Using Smar
 
 5.  **Create Tidy Dataset:** A second, independent tidy dataset was created with the average of each variable for each activity and each subject.
 
-#### Tidy Dataset
+### Tidy Dataset
 
 The tidy dataset contains the average of each variable for each activity and each subject. Each row in the dataset represents a unique combination of subject and activity, and each column represents a variable with the average value for that combination.
 
-#### Additional Information
+### Additional Information
 
 -   The dataset contains 10,299 instances.
 -   The experiments involved 30 subjects aged 19-48 years.
