@@ -13,7 +13,7 @@ As you navigate through this repository, you'll encounter a variety of projects 
 ## Projects highlights
 - **[Asthma Study Using the 2022 BRFSS Survey Data in R](Asthma-study-in-R)**: A deep dive into the Behavioral Risk Factor Surveillance System data to explore the multifaceted nature of asthma. This project showcases my ability to navigate through a vast dataset, apply logistic regression, and uncover insights that bridge the gap between data science and public health. The study revealed significant associations between asthma prevalence and factors such as race/ethnicity, sex, BMI category, and smoking status, contributing valuable insights to the field of medical data science.
 
-- **[Salifort Motors in Python](Salifort-Motors-analysis-Python)**: This data analysis embarked on a comprehensive exploration of employee workload, satisfaction, and potential enhancement areas within Salifort Motors using Jupiter Notebook.
+- **[Salifort Motors in Python](Salifort-Motors-analysis-Python)**: This data analysis embarked on a comprehensive exploration of employee workload, satisfaction, and potential enhancement areas within Salifort Motors using Jupyter Notebook.
 
 - **[Data Cleaning and Transformation Project in R](Data-Cleaning-and-Transformation-Project-R)**: for the "Human Activity Recognition Using Smartphones" project. This project involves merging datasets, extracting mean and standard deviation measurements, assigning descriptive activity names, and creating a tidy dataset containing the average value of each variable for each activity and subject. 
 
