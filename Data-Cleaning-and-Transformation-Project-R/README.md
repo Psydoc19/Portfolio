@@ -1,7 +1,5 @@
 # Data cleaning and transformation in R
 
-## **Project README**
-
 This repository contains scripts and data for the "Human Activity Recognition Using Smartphones" project. Below is an overview of the project structure and instructions on how to use the scripts.
 
 ### Project Structure
